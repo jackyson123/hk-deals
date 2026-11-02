@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --ink: #17324a;
+  --teal: #087f83;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --surface: #ffffff;
+  --canvas: #f4f7fa;
+}
+* { box-sizing: border-box; }
+html { background: var(--canvas); }
+body { margin: 0; color: var(--ink); font-family: Arial, "Noto Sans TC", sans-serif; }
+button, input, select { font: inherit; }
+button { cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+.shell { width: min(1120px, calc(100% - 32px)); margin: 0 auto; }
+.hero { color: white; background: linear-gradient(125deg,#102c46,#087f83); border-radius: 24px; padding: 32px; }
+.panel { background: white; border: 1px solid var(--line); border-radius: 16px; }
+.control { width: 100%; min-width: 0; padding: 12px 14px; border: 1px solid #d8e1e9; border-radius: 11px; background: white; color: var(--ink); }
+.pill { border: 1px solid var(--line); border-radius: 999px; padding: 8px 13px; font-size: 13px; background: white; }
+.pill[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: white; }
+.primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 11px; padding: 11px 15px; background: var(--teal); color: white; font-weight: 700; }
+.deal-card { overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: white; }
+.deal-art { display: grid; place-items: center; min-height: 110px; background: #e6f2f0; font-size: 42px; }
+.badge { display: inline-block; border-radius: 6px; padding: 4px 7px; background: #edf5f4; color: #087f83; font-size: 11px; }
+.muted { color: var(--muted); }
+@media (max-width: 640px) { .hero { padding: 24px 20px; } .shell { width: min(100% - 22px, 1120px); } }
