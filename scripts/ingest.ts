@@ -17,6 +17,16 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!supabaseUrl || !serviceKey) {
   throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
 }
+try {
+  new URL(supabaseUrl);
+} catch {
+  throw new Error("NEXT_PUBLIC_SUPABASE_URL is not a valid URL. Check the repository secret.");
+}
+if (/YOUR_PROJECT|<your|example\.supabase\.co/i.test(supabaseUrl)) {
+  throw new Error(
+    "NEXT_PUBLIC_SUPABASE_URL still holds a placeholder value. Set the real project URL in the repository secrets."
+  );
+}
 
 const supabase = createClient(supabaseUrl, serviceKey, {
   auth: { persistSession: false, autoRefreshToken: false }
@@ -48,18 +58,45 @@ function hongKongDate(offsetDays = 0) {
   return date.toLocaleDateString("en-CA", { timeZone: "Asia/Hong_Kong" });
 }
 
-async function expirePastDeals() {
-  const { error } = await supabase
-    .from("deals")
-    .update({ status: "expired", updated_at: new Date().toISOString() })
-    .lt("expires_at", hongKongDate())
-    .eq("status", "active");
-  if (error) console.error("Expiry update failed:", error.message);
+function describeFetchError(error: unknown) {
+  const cause = (error as { cause?: { code?: string; message?: string } })?.cause;
+  if (!cause) return "";
+  return ` (cause: ${cause.code ?? cause.message ?? "unknown"})`;
+}
+
+async function expirePastDeals(): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("deals")
+      .update({ status: "expired", updated_at: new Date().toISOString() })
+      .lt("expires_at", hongKongDate())
+      .eq("status", "active");
+    if (error) {
+      console.error("Expiry update failed:", error.message);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error(
+      "Expiry update failed:",
+      (error as Error)?.message ?? error,
+      describeFetchError(error)
+    );
+    return false;
+  }
 }
 
 async function main() {
   // Mark past deals as expired on every run, including runs without feeds.
-  await expirePastDeals();
+  // A project that cannot be reached is a real failure: surface it instead of
+  // letting the scheduled job report success while the site stays empty.
+  const reachable = await expirePastDeals();
+  if (!reachable) {
+    console.error(
+      "Supabase is not reachable with the configured NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY."
+    );
+    process.exitCode = 1;
+  }
 
   if (!feedUrls.length) {
     console.log(
