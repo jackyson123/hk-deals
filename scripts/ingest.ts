@@ -43,9 +43,30 @@ function clean(value: string, max = 1000) {
   return value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
+function hongKongDate(offsetDays = 0) {
+  const date = new Date(Date.now() + offsetDays * 86400000);
+  return date.toLocaleDateString("en-CA", { timeZone: "Asia/Hong_Kong" });
+}
+
+async function expirePastDeals() {
+  const { error } = await supabase
+    .from("deals")
+    .update({ status: "expired", updated_at: new Date().toISOString() })
+    .lt("expires_at", hongKongDate())
+    .eq("status", "active");
+  if (error) console.error("Expiry update failed:", error.message);
+}
+
 async function main() {
+  // Mark past deals as expired on every run, including runs without feeds.
+  await expirePastDeals();
+
   if (!feedUrls.length) {
-    console.log("No DEAL_FEED_URLS configured. No external feed was fetched.");
+    console.log(
+      "No DEAL_FEED_URLS configured. No external feed was fetched. " +
+        "Set the DEAL_FEED_URLS repository variable (Settings > Secrets and variables > Actions > Variables) " +
+        "to a comma-separated list of RSS/Atom feeds you are permitted to use."
+    );
     return;
   }
 
@@ -94,13 +115,6 @@ async function main() {
       console.error(`Feed failed: ${feedUrl}`, error);
     }
   }
-
-  const { error: expireError } = await supabase
-    .from("deals")
-    .update({ status: "expired", updated_at: new Date().toISOString() })
-    .lt("expires_at", new Date().toISOString().slice(0, 10))
-    .eq("status", "active");
-  if (expireError) console.error("Expiry update failed:", expireError.message);
 
   console.log(`Ingestion complete. Upserted ${insertedOrUpdated} feed items.`);
 }
