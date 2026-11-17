@@ -59,9 +59,17 @@ function hongKongDate(offsetDays = 0) {
 }
 
 function describeFetchError(error: unknown) {
-  const cause = (error as { cause?: { code?: string; message?: string } })?.cause;
+  const cause = (error as { cause?: { code?: string; message?: string; errno?: string } })?.cause;
   if (!cause) return "";
-  return ` (cause: ${cause.code ?? cause.message ?? "unknown"})`;
+  return ` (cause: ${cause.code ?? cause.errno ?? cause.message ?? "unknown"})`;
+}
+
+function supabaseHost() {
+  try {
+    return new URL(supabaseUrl as string).host;
+  } catch {
+    return "(unparseable)";
+  }
 }
 
 async function expirePastDeals(): Promise<boolean> {
@@ -93,7 +101,7 @@ async function main() {
   const reachable = await expirePastDeals();
   if (!reachable) {
     console.error(
-      "Supabase is not reachable with the configured NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY."
+      `Supabase is not reachable at ${supabaseHost()} with the configured NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY.`
     );
     process.exitCode = 1;
   }
