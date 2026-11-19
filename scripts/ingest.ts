@@ -116,11 +116,18 @@ async function main() {
   }
 
   let insertedOrUpdated = 0;
+  let fetchedItems = 0;
+  let attemptedUpserts = 0;
+  let failedUpserts = 0;
+  const failedFeeds: string[] = [];
+
   for (const feedUrl of feedUrls) {
     try {
       const feed = await parser.parseURL(feedUrl);
       const sourceName = clean(feed.title || new URL(feedUrl).hostname, 120);
-      for (const item of (feed.items as FeedItem[]).slice(0, 100)) {
+      const items = (feed.items as FeedItem[]).slice(0, 100);
+      fetchedItems += items.length;
+      for (const item of items) {
         const title = clean(item.title || "");
         const link = item.link || "";
         if (!title || !link || !/^https?:\/\//i.test(link)) continue;
@@ -148,20 +155,48 @@ async function main() {
           updated_at: new Date().toISOString()
         };
 
+        attemptedUpserts++;
         const { error } = await supabase.from("deals").upsert(record, { onConflict: "id" });
         if (error) {
+          failedUpserts++;
           console.error(`Upsert failed for ${link}: ${error.message}`);
           continue;
         }
         insertedOrUpdated++;
       }
-      console.log(`Processed feed: ${sourceName}`);
+      console.log(`Processed feed: ${sourceName} (${items.length} items)`);
     } catch (error) {
+      failedFeeds.push(feedUrl);
       console.error(`Feed failed: ${feedUrl}`, error);
     }
   }
 
-  console.log(`Ingestion complete. Upserted ${insertedOrUpdated} feed items.`);
+  console.log(
+    `Ingestion complete. Fetched ${fetchedItems} feed items, attempted ${attemptedUpserts} upserts, ` +
+      `upserted ${insertedOrUpdated}, failed ${failedUpserts}.`
+  );
+
+  // A run that fetched feeds but stored nothing must not look like a success:
+  // the scheduled job would keep showing green while the site silently goes stale.
+  if (fetchedItems === 0) {
+    console.error(
+      failedFeeds.length === feedUrls.length
+        ? `All ${feedUrls.length} configured feed(s) failed to fetch (${failedFeeds.join(", ")}). Nothing was ingested.`
+        : `Configured feeds returned no items (fetched 0). Check DEAL_FEED_URLS and whether the feeds still publish entries.`
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  if (insertedOrUpdated === 0) {
+    console.error(
+      `Fetched ${fetchedItems} feed item(s) but upserted 0 (attempted ${attemptedUpserts}, failed ${failedUpserts}). ` +
+        (attemptedUpserts === 0
+          ? "Every fetched item was skipped because it had no usable title or link."
+          : "Every upsert failed — see the error above.")
+    );
+    process.exitCode = 1;
+  }
 }
 
 main().catch((error) => {
